@@ -23,48 +23,56 @@ class BlockingQueue:
                 self.condition.wait()
             return self.q.popleft()
 
-def produce(shared_q):
+def produce(shared_q, num_consumers):
     packet_id = 1
     total_packets = 10
     while packet_id <= total_packets:
-        delay = random.uniform(1.0,2.0)
+        delay = random.uniform(0.1,1.0)
         print(f"Random sleep period: {delay}")
         time.sleep(delay)
         shared_q.put(f"packet_{packet_id}")
         packet_id += 1
     
-    shared_q.put(None)  # to signal the end
+    for _ in range(num_consumers):
+        shared_q.put(None)  # to signal the end
     print("[Producer] Finished packets generation")
 
 
-def consume(packet_queue):
+def consume(packet_queue, consumer_id):
     while True:
         packet = packet_queue.get()
 
         if packet is None:
             break
 
-        print(f"  [Consumer] Processing: {packet}...")
-        time.sleep(random.uniform(0.5, 1.2)) 
-        print(f"  [Consumer] Finished processing: {packet}")
+        print(f"  [Consumer-{consumer_id}] Processing: {packet}...")
+        time.sleep(random.uniform(2.0, 3.0)) 
+        print(f"  [Consumer-{consumer_id}] Finished processing: {packet}")
 
         # Signal to the queue that the job is done
         #packet_queue.task_done()
     
-    print("[Consumer] No more packets. Shutting down.")
+    print(f"[Consumer-{consumer_id}] No more packets. Shutting down.")
 
 
 def main():
+    NUM_CONSUMERS = 3
     shared_q = BlockingQueue()
 
-    producer = threading.Thread(target=produce, args=(shared_q,))
-    consumer = threading.Thread(target=consume, args=(shared_q,))
-
+    producer = threading.Thread(target=produce, args=(shared_q, NUM_CONSUMERS))
     producer.start()
-    consumer.start()
+
+    consumers = []
+    for i in range(NUM_CONSUMERS):
+        consumer = threading.Thread(target=consume, args=(shared_q, i))
+        consumer.start()
+        consumers.append(consumer)
+    
+    
 
     producer.join()
-    consumer.join()
+    for c in consumers:
+        c.join()
 
     print("Finished producer-consumer main thread")
 
